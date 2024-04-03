@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {BeforeSwapParams, AfterSwapParams, BeforeModifyPositionParams, AfterModifyPositionParams, BeforeFlashParams, AfterFlashParams} from "../types/HookParams.sol";
 
 library ModuleUtils {
+    /// @dev Used to immediately return dynamic fee data from module to the Modular Hub
     function returnDynamicFeeResult(
         uint16 newFeeValue,
         bool updateImmediately
@@ -13,6 +14,8 @@ library ModuleUtils {
             return(add(0x20, returnData), mload(returnData))
         }
     }
+
+    // Helper functions used to simplify decoding of params in modules
 
     function decodeBeforeSwapParams(
         bytes memory params

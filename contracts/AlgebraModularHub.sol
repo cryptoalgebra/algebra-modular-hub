@@ -197,7 +197,11 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
         bool useDelegate,
         bool useDynamicFee
     ) internal view returns (HookList) {
-        require(moduleIndex <= modulesCounter && moduleIndex < 1 << 6);
+        require(
+            moduleIndex != 0 &&
+                moduleIndex <= modulesCounter &&
+                moduleIndex < 1 << 6
+        );
         require(indexInList <= 30);
 
         return

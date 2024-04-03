@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity >=0.7.0;
 
 /// @notice The interface of a module for the Algebra Modular system.
 interface IAlgebraModule {

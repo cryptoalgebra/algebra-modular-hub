@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import {IAlgebraModule} from "../interfaces/IAlgebraModule.sol";
 import {IAlgebraPlugin} from "@cryptoalgebra/integral-core/contracts/interfaces/plugin/IAlgebraPlugin.sol";
 
+/// @notice The Algebra nodule base abstract contract
+/// @dev Implements default functionality and can be used for new modules building
 abstract contract AlgebraModule is IAlgebraModule {
     /**
      * @inheritdoc IAlgebraModule

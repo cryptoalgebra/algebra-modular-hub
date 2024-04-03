@@ -7,13 +7,21 @@ contract PoolMock {
     uint160 public currentPrice = uint160(1) * (2 ** 96);
     uint16 public currentFee = 500;
     address public plugin;
+    uint8 public _pluginConfig;
 
     function globalState()
         external
         view
-        returns (uint160 price, int24, uint16 lastFee, uint8, uint16, bool)
+        returns (
+            uint160 price,
+            int24,
+            uint16 lastFee,
+            uint8 pluginConfig,
+            uint16,
+            bool
+        )
     {
-        return (currentPrice, 0, currentFee, 0, 0, true);
+        return (currentPrice, 0, currentFee, _pluginConfig, 0, true);
     }
 
     function setPrice(uint160 newValue) external {
@@ -26,6 +34,10 @@ contract PoolMock {
 
     function setPlugin(address _plugin) external {
         plugin = _plugin;
+    }
+
+    function setPluginConfig(uint8 newPluginConfig) external {
+        _pluginConfig = newPluginConfig;
     }
 
     function pseudoSwap(uint160 toPrice) external {

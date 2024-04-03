@@ -10,17 +10,17 @@ library PoolInteractions {
         IAlgebraPool(poolAddress).setFee(value);
     }
 
+    /// @dev Should be used carefully because of read-only-reentrancy
     function getFee(address poolAddress) internal view returns (uint16) {
-        // TODO check reentrancy
         (, , uint16 lastFee, , , ) = IAlgebraPool(poolAddress).globalState();
         return lastFee;
     }
 
-    function hasHookActivated(
+    /// @dev Should be used carefully because of read-only-reentrancy
+    function isHookActivated(
         address poolAddress,
         bytes4 selector
     ) internal view returns (bool) {
-        // TODO check reentrancy
         uint8 pluginConfig = _getPluginConfig(poolAddress);
         return Plugins.hasFlag(pluginConfig, flagForHook(selector));
     }
@@ -43,10 +43,10 @@ library PoolInteractions {
         }
     }
 
+    /// @dev returns 0 for an incorrect hook
     function flagForHook(bytes4 selector) internal pure returns (uint256) {
         uint256 flag;
 
-        //TODO should not use incorrect selector
         if (selector == IAlgebraPlugin.beforeSwap.selector)
             flag = Plugins.BEFORE_SWAP_FLAG;
         else if (selector == IAlgebraPlugin.afterSwap.selector)
