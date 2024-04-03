@@ -3,122 +3,228 @@ pragma solidity ^0.8.24;
 
 import {IAlgebraPlugin} from "@cryptoalgebra/integral-core/contracts/interfaces/plugin/IAlgebraPlugin.sol";
 import {IAlgebraPool} from "@cryptoalgebra/integral-core/contracts/interfaces/IAlgebraPool.sol";
+import {IAlgebraFactory} from "@cryptoalgebra/integral-core/contracts/interfaces/IAlgebraFactory.sol";
 
 import {IAlgebraModule} from "./interfaces/IAlgebraModule.sol";
+import {IAlgebraModularHub} from "./interfaces/IAlgebraModularHub.sol";
 
-import "hardhat/console.sol";
+import {HookList} from "./types/HookList.sol";
+import {ModuleData} from "./types/ModuleData.sol";
 
-// Prototype version
-contract AlgebraModularHub is IAlgebraPlugin {
-    address public immutable pool;
+import {HookListLib} from "./libraries/HookListLib.sol";
+import {ModuleDataLib} from "./libraries/ModuleDataLib.sol";
+import {PoolInteractions} from "./libraries/PoolInteractions.sol";
+import {BeforeSwapParams, AfterSwapParams, BeforeModifyPositionParams, AfterModifyPositionParams, BeforeFlashParams, AfterFlashParams} from "./types/HookParams.sol";
 
-    mapping(bytes4 hookSelector => bytes32) public hookLists;
-    mapping(uint256 moduleIndex => bytes32) public modules;
+/// @title Algebra Modular Hub
+/// @notice This plugin is used to flexibly connect different modules to the liquidity pool
+/// @dev Version: Algebra Integral 1.0
+contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
+    using HookListLib for HookList;
+    using ModuleDataLib for ModuleData;
 
+    /// @inheritdoc IAlgebraModularHub
+    address public immutable override pool;
+    /// @inheritdoc IAlgebraModularHub
+    address public immutable override factory;
+
+    /// @inheritdoc IAlgebraModularHub
+    bytes32 public constant override POOLS_ADMINISTRATOR_ROLE =
+        keccak256("POOLS_ADMINISTRATOR"); // it`s here for the public visibility of the value
+
+    /// @inheritdoc IAlgebraModularHub
+    mapping(bytes4 hookSelector => HookList) public override hookLists;
+    /// @inheritdoc IAlgebraModularHub
+    mapping(uint256 moduleIndex => ModuleData) public override modules;
+
+    /// @inheritdoc IAlgebraModularHub
     uint256 public modulesCounter;
-
-    uint256 private constant DYNAMIC_FEE_FLAG = 1;
 
     modifier onlyPool() {
         require(msg.sender == pool);
         _;
     }
 
-    constructor(address _pool) {
-        pool = _pool;
+    modifier onlyPoolAdministrator() {
+        require(
+            IAlgebraFactory(factory).hasRoleOrOwner(
+                POOLS_ADMINISTRATOR_ROLE,
+                msg.sender
+            )
+        );
+        _;
     }
 
+    constructor(address _pool, address _factory) {
+        pool = _pool;
+        factory = _factory;
+    }
+
+    /// @inheritdoc IAlgebraModularHub
     function getModuleForHookByIndex(
         bytes4 selector,
         uint256 index
     )
         external
         view
+        override
         returns (
             uint256 moduleIndex,
             bool implementsDynamicFee,
             bool useDelegate
         )
     {
-        // TODO check selector
-        return _readModuleInfoForHook(hookLists[selector], index);
+        _checkSelector(selector);
+        return hookLists[selector].getModule(index);
     }
 
-    // TODO only admin
-    function registerModule(address module) external {
-        uint256 index = ++modulesCounter; // starting from 1
+    /// @inheritdoc IAlgebraModularHub
+    function getModulesForHook(
+        bytes4 selector
+    )
+        external
+        view
+        override
+        returns (
+            uint256[] memory moduleIndexes,
+            bool[] memory hasDynamicFee,
+            bool[] memory usesDelegate
+        )
+    {
+        moduleIndexes = new uint256[](30);
+        hasDynamicFee = new bool[](30);
+        usesDelegate = new bool[](30);
 
-        bytes32 data;
-        assembly {
-            data := and(module, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+        _checkSelector(selector);
+        HookList config = hookLists[selector];
+
+        uint256 length;
+        for (uint256 i; i < 31; i++) {
+            (moduleIndexes[i], hasDynamicFee[i], usesDelegate[i]) = config
+                .getModule(i);
+            if (moduleIndexes[i] == 0) break; // empty place
+            length++;
         }
-        modules[index] = data;
+
+        // rewrite length in arrays
+        assembly {
+            mstore(moduleIndexes, length)
+            mstore(hasDynamicFee, length)
+            mstore(usesDelegate, length)
+        }
     }
 
-    // TODO only admin
-    function replaceModule(uint256 index, address module) external {
-        //! dangerous action
+    /// @inheritdoc IAlgebraModularHub
+    function registerModule(
+        address moduleAddress
+    ) external override onlyPoolAdministrator returns (uint256 index) {
+        index = ++modulesCounter; // starting from 1
+        modules[index] = ModuleDataLib.write(moduleAddress);
+    }
+
+    /// @inheritdoc IAlgebraModularHub
+    function replaceModule(
+        uint256 index,
+        address moduleAddress
+    ) external override onlyPoolAdministrator {
+        // dangerous action
         require(index <= modulesCounter);
-        bytes32 data;
-        assembly {
-            data := and(module, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
-        }
-        modules[index] = data;
+        modules[index] = ModuleDataLib.write(moduleAddress);
     }
 
-    // TODO only admin
+    /// @inheritdoc IAlgebraModularHub
     function connectModuleToHook(
         bytes4 selector,
         uint256 moduleIndex,
         bool useDelegate,
         bool useDynamicFee
-    ) external {
-        // TODO check selector
+    )
+        external
+        override
+        onlyPoolAdministrator
+        returns (uint256 indexInHookList)
+    {
+        _checkSelector(selector);
+        HookList config = hookLists[selector];
 
+        for (; indexInHookList < 32; ++indexInHookList) {
+            // trying to find free place for module
+            if (indexInHookList == 31) revert("No free place");
+            if (config.getModuleRaw(indexInHookList) == 0) break;
+        }
+
+        if (!config.hasActiveModules()) {
+            PoolInteractions.activateHook(pool, selector);
+        }
+
+        hookLists[selector] = _insertModuleToHookList(
+            config,
+            indexInHookList,
+            moduleIndex,
+            useDelegate,
+            useDynamicFee
+        );
+    }
+
+    /// @inheritdoc IAlgebraModularHub
+    function insertModuleToHookList(
+        bytes4 selector,
+        uint256 indexInHookList,
+        uint256 moduleIndex,
+        bool useDelegate,
+        bool useDynamicFee
+    ) external override onlyPoolAdministrator {
+        _checkSelector(selector);
+        HookList config = hookLists[selector];
+
+        if (!config.hasActiveModules()) {
+            PoolInteractions.activateHook(pool, selector);
+        }
+
+        hookLists[selector] = _insertModuleToHookList(
+            config,
+            indexInHookList,
+            moduleIndex,
+            useDelegate,
+            useDynamicFee
+        );
+    }
+
+    function _insertModuleToHookList(
+        HookList config,
+        uint256 indexInList,
+        uint256 moduleIndex,
+        bool useDelegate,
+        bool useDynamicFee
+    ) internal view returns (HookList) {
         require(moduleIndex <= modulesCounter && moduleIndex < 1 << 6);
-        bytes32 config = hookLists[selector];
+        require(indexInList <= 30);
 
-        uint256 freePlacePointer;
-        for (; freePlacePointer < 32; ++freePlacePointer) {
-            if (freePlacePointer == 31) revert("No free place");
+        return
+            config.insertModule(
+                indexInList,
+                moduleIndex,
+                useDelegate,
+                useDynamicFee
+            );
+    }
 
-            uint256 moduleInfo;
-            assembly {
-                moduleInfo := and(shr(mul(freePlacePointer, 8), config), 0xFF)
-            }
-            if (moduleInfo == 0) break;
+    /// @inheritdoc IAlgebraModularHub
+    function removeModuleFromList(
+        bytes4 selector,
+        uint256 indexInList
+    ) external override onlyPoolAdministrator {
+        _checkSelector(selector);
+        HookList config = hookLists[selector].removeModule(indexInList);
+
+        if (!config.hasActiveModules()) {
+            PoolInteractions.deactivateHook(pool, selector);
         }
-
-        assembly {
-            let moduleInfo := or(moduleIndex, shl(6, useDelegate))
-            moduleInfo := or(moduleInfo, shl(7, useDynamicFee))
-            config := or(
-                config,
-                shl(mul(freePlacePointer, 8), and(0xFF, moduleInfo))
-            )
-        }
-
-        // TODO should check if we have dynamic fee modules connected
-        if (useDynamicFee) {
-            uint256 metadata;
-            assembly {
-                metadata := shr(31, config)
-            }
-            if (metadata & DYNAMIC_FEE_FLAG == 0) {
-                metadata = metadata | DYNAMIC_FEE_FLAG;
-                // TODO use mask to clear old metadata
-                assembly {
-                    config := or(config, shl(31, metadata))
-                }
-            }
-        }
-
         hookLists[selector] = config;
     }
 
-    // TODO add insert module to hook list
-
-    function defaultPluginConfig() external pure returns (uint8) {
+    /// @inheritdoc IAlgebraPlugin
+    function defaultPluginConfig() external pure override returns (uint8) {
         return 0;
     }
 
@@ -150,13 +256,15 @@ contract AlgebraModularHub is IAlgebraPlugin {
     ) external virtual onlyPool returns (bytes4 selector) {
         selector = IAlgebraPlugin.beforeModifyPosition.selector;
         bytes memory params = abi.encode(
-            pool,
-            sender,
-            recipient,
-            bottomTick,
-            topTick,
-            desiredLiquidityDelta,
-            data
+            BeforeModifyPositionParams(
+                pool,
+                sender,
+                recipient,
+                bottomTick,
+                topTick,
+                desiredLiquidityDelta,
+                data
+            )
         );
         _executeHook(selector, params);
     }
@@ -174,15 +282,17 @@ contract AlgebraModularHub is IAlgebraPlugin {
     ) external virtual onlyPool returns (bytes4 selector) {
         selector = IAlgebraPlugin.afterModifyPosition.selector;
         bytes memory params = abi.encode(
-            pool,
-            sender,
-            recipient,
-            bottomTick,
-            topTick,
-            desiredLiquidityDelta,
-            amount0,
-            amount1,
-            data
+            AfterModifyPositionParams(
+                pool,
+                sender,
+                recipient,
+                bottomTick,
+                topTick,
+                desiredLiquidityDelta,
+                amount0,
+                amount1,
+                data
+            )
         );
         _executeHook(selector, params);
     }
@@ -199,14 +309,16 @@ contract AlgebraModularHub is IAlgebraPlugin {
     ) external virtual onlyPool returns (bytes4 selector) {
         selector = IAlgebraPlugin.beforeSwap.selector;
         bytes memory params = abi.encode(
-            pool,
-            sender,
-            recipient,
-            zeroToOne,
-            amountRequired,
-            limitSqrtPrice,
-            withPaymentInAdvance,
-            data
+            BeforeSwapParams(
+                pool,
+                sender,
+                recipient,
+                zeroToOne,
+                amountRequired,
+                limitSqrtPrice,
+                withPaymentInAdvance,
+                data
+            )
         );
         _executeHook(selector, params);
     }
@@ -224,15 +336,17 @@ contract AlgebraModularHub is IAlgebraPlugin {
     ) external virtual onlyPool returns (bytes4 selector) {
         selector = IAlgebraPlugin.afterSwap.selector;
         bytes memory params = abi.encode(
-            pool,
-            sender,
-            recipient,
-            zeroToOne,
-            amountRequired,
-            limitSqrtPrice,
-            amount0,
-            amount1,
-            data
+            AfterSwapParams(
+                pool,
+                sender,
+                recipient,
+                zeroToOne,
+                amountRequired,
+                limitSqrtPrice,
+                amount0,
+                amount1,
+                data
+            )
         );
         _executeHook(selector, params);
     }
@@ -247,12 +361,7 @@ contract AlgebraModularHub is IAlgebraPlugin {
     ) external virtual onlyPool returns (bytes4 selector) {
         selector = IAlgebraPlugin.beforeFlash.selector;
         bytes memory params = abi.encode(
-            pool,
-            sender,
-            recipient,
-            amount0,
-            amount1,
-            data
+            BeforeFlashParams(pool, sender, recipient, amount0, amount1, data)
         );
         _executeHook(selector, params);
     }
@@ -269,30 +378,30 @@ contract AlgebraModularHub is IAlgebraPlugin {
     ) external virtual onlyPool returns (bytes4 selector) {
         selector = IAlgebraPlugin.afterFlash.selector;
         bytes memory params = abi.encode(
-            pool,
-            sender,
-            recipient,
-            amount0,
-            amount1,
-            paid0,
-            paid1,
-            data
+            AfterFlashParams(
+                pool,
+                sender,
+                recipient,
+                amount0,
+                amount1,
+                paid0,
+                paid1,
+                data
+            )
         );
         _executeHook(selector, params);
     }
 
+    /// @dev Calls modules from the list for the hook.
+    /// Params are abi encoded and passed to modules
     function _executeHook(bytes4 selector, bytes memory params) internal {
-        bytes32 config = hookLists[selector];
+        HookList config = hookLists[selector];
         uint16 poolFee;
         uint16 poolFeeCache;
         {
-            // read metadata from highest byte
-            uint256 metadata;
-            assembly {
-                metadata := shr(31, config)
-            }
-            if (metadata & DYNAMIC_FEE_FLAG != 0) {
-                poolFee = _getCurrentFee(pool);
+            if (config.hasDynamicFee()) {
+                // get and cache fee
+                poolFee = PoolInteractions.getFee(pool);
                 poolFeeCache = poolFee;
             }
         }
@@ -305,18 +414,11 @@ contract AlgebraModularHub is IAlgebraPlugin {
                     uint256 index,
                     bool implementsDynamicFee,
                     bool useDelegate
-                ) = _readModuleInfoForHook(config, i);
-                if (index == 0) break;
+                ) = config.getModule(i);
+                if (index == 0) break; // empty slot
 
                 // we are trying to minimize cold slots SLOADs
-                bytes32 module = modules[index];
-                address moduleAddress;
-                assembly {
-                    moduleAddress := and(
-                        module,
-                        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
-                    )
-                }
+                address moduleAddress = modules[index].getAddress();
 
                 bool success;
                 bytes memory returnData;
@@ -341,14 +443,7 @@ contract AlgebraModularHub is IAlgebraPlugin {
                     );
                 }
 
-                if (!success) {
-                    // Look for revert reason and bubble it up if present
-                    require(returnData.length > 0);
-                    // The easiest way to bubble the revert reason is using memory via assembly
-                    assembly ("memory-safe") {
-                        revert(add(32, returnData), mload(returnData))
-                    }
-                }
+                if (!success) _propagateError(returnData);
 
                 if (implementsDynamicFee) {
                     // in this case module should return fee value and updateFeeImmediately
@@ -358,18 +453,37 @@ contract AlgebraModularHub is IAlgebraPlugin {
                     );
 
                     if (updateImmediately) {
-                        poolFee = poolFeeCache;
-                        _updateFeeInPool(pool, poolFeeCache);
+                        if (poolFee != poolFeeCache) {
+                            poolFee = poolFeeCache;
+                            PoolInteractions.setFee(pool, poolFeeCache);
+                        }
                     }
                 }
             }
         }
 
         if (poolFee != poolFeeCache) {
-            _updateFeeInPool(pool, poolFeeCache);
+            PoolInteractions.setFee(pool, poolFeeCache);
         }
     }
 
+    /// @dev Checks if selector is allowed
+    function _checkSelector(bytes4 selector) internal pure {
+        bool correct = PoolInteractions.flagForHook(selector) != 0;
+        require(correct, "Invalid selector");
+    }
+
+    /// @dev Propagates an error from external call or delegate call
+    function _propagateError(bytes memory returnData) internal pure {
+        // Look for revert reason and bubble it up if present
+        require(returnData.length > 0);
+        // The easiest way to bubble the revert reason is using memory via assembly
+        assembly ("memory-safe") {
+            revert(add(32, returnData), mload(returnData))
+        }
+    }
+
+    /// @dev Decodes optional dynamic fee data from call
     function _decodeDynamicFeeResult(
         bytes memory returnData
     ) internal pure returns (uint16 feeValue, bool updateFeeImmediately) {
@@ -378,38 +492,5 @@ contract AlgebraModularHub is IAlgebraPlugin {
             updateFeeImmediately := mload(add(0x40, returnData))
         }
         return (feeValue, updateFeeImmediately);
-    }
-
-    function _readModuleInfoForHook(
-        bytes32 hookList,
-        uint256 index
-    )
-        internal
-        pure
-        returns (
-            uint256 moduleIndex,
-            bool implementsDynamicFee,
-            bool useDelegate
-        )
-    {
-        // each byte contains: 6 bits for index, 1 bit as dynamicFee flag, 1 bit as useDelegate flag
-        // so we can have only 64 module total
-        assembly {
-            moduleIndex := shr(mul(index, 8), hookList)
-            implementsDynamicFee := and(shr(7, moduleIndex), 1)
-            useDelegate := and(shr(6, moduleIndex), 1)
-            moduleIndex := and(0x3F, moduleIndex)
-        }
-    }
-
-    function _updateFeeInPool(address poolAddress, uint16 value) internal {
-        IAlgebraPool(poolAddress).setFee(value);
-    }
-
-    function _getCurrentFee(
-        address poolAddress
-    ) internal view returns (uint16) {
-        (, , uint16 lastFee, , , ) = IAlgebraPool(poolAddress).globalState();
-        return lastFee;
     }
 }

@@ -79,14 +79,4 @@ abstract contract AlgebraModule is IAlgebraModule {
     ) internal virtual {
         revert("Not implemented");
     }
-
-    function _returnDynamicFeeResult(
-        uint16 newFeeValue,
-        bool updateImmediately
-    ) internal virtual {
-        bytes memory returndata = abi.encode(newFeeValue, updateImmediately);
-        assembly {
-            return(add(0x20, returndata), mload(returndata))
-        }
-    }
 }
