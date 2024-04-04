@@ -8,6 +8,38 @@ import {ModuleData} from "../types/ModuleData.sol";
 /// @dev This contract used to proxy hook calls from the Algebra liquidity pool to different modules.
 /// This way different modules can be connected to different hooks. They can be connected, replaced or removed independently at any moment.
 interface IAlgebraModularHub {
+    /// @notice Emitted after new module is registered
+    /// @param moduleAddress The address of module contract
+    /// @param moduleIndex The global index of module in ModularHub
+    event ModuleRegistered(address moduleAddress, uint256 moduleIndex);
+
+    /// @notice Emitted after module replacement
+    /// @param newModuleAddress The address of new module contract
+    /// @param moduleIndex The global index of module in ModularHub
+    event ModuleReplaced(address newModuleAddress, uint256 moduleIndex);
+
+    /// @notice Emitted after module added to modules list for a hook
+    /// @param hookSelector The selector of corresponding hook
+    /// @param moduleIndex The global index of module in ModularHub
+    /// @param indexInHookList The index of module in modules list for hook
+    /// @param useDelegate Should corresponding module be called with delegate call or not
+    /// @param useDynamicFee Does corresponding module implement dynamic fee for this hook or not
+    event ModuleAddedToHook(
+        bytes4 indexed hookSelector,
+        uint256 indexed moduleIndex,
+        uint256 indexInHookList,
+        bool useDelegate,
+        bool useDynamicFee
+    );
+
+    /// @notice Emitted after module removed from modules list for a hook
+    /// @param hookSelector The selector of corresponding hook
+    /// @param indexInHookList The index of module in modules list for hook
+    event ModuleRemovedFromHook(
+        bytes4 indexed hookSelector,
+        uint256 indexInHookList
+    );
+
     /// @notice Returns the address of the pool the plugin is created for
     /// @return Address of the pool
     function pool() external view returns (address);

@@ -33,17 +33,18 @@ library HookListLib {
         bool useDelegate,
         bool useDynamicFee
     ) internal pure returns (HookList) {
+        require(indexInList < 31, "Invalid index");
         if (indexInList > 0) {
             // we do not allow to create gaps in list
             uint256 previousModule = indexInList - 1;
             uint256 moduleInfo = getModuleRaw(config, previousModule);
-            require(moduleInfo != 0);
+            require(moduleInfo != 0, "Can't create gaps in hook list");
         }
 
         if (indexInList < 30) {
             // check if we have free place
             uint256 moduleInfo = getModuleRaw(config, 30);
-            require(moduleInfo == 0);
+            require(moduleInfo == 0, "No free space in hook list");
 
             // shift next modules to create free gap
             uint256 mask;
@@ -84,7 +85,7 @@ library HookListLib {
         HookList config,
         uint256 indexInList
     ) internal pure returns (HookList) {
-        require(indexInList < 31);
+        require(indexInList < 31, "Invalid index");
 
         uint256 mask;
         assembly {

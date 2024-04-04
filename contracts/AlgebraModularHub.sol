@@ -119,7 +119,9 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
         address moduleAddress
     ) external override onlyPoolAdministrator returns (uint256 index) {
         index = ++modulesCounter; // starting from 1
+        require(index < 1 << 6, "Can't add new modules anymore");
         modules[index] = ModuleDataLib.write(moduleAddress);
+        emit ModuleRegistered(moduleAddress, index);
     }
 
     /// @inheritdoc IAlgebraModularHub
@@ -128,8 +130,10 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
         address moduleAddress
     ) external override onlyPoolAdministrator {
         // dangerous action
-        require(index <= modulesCounter);
+        require(index <= modulesCounter, "Module not registered");
+        require(moduleAddress != address(0), "Can't replace module with zero");
         modules[index] = ModuleDataLib.write(moduleAddress);
+        emit ModuleReplaced(moduleAddress, index);
     }
 
     /// @inheritdoc IAlgebraModularHub
@@ -164,6 +168,14 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
             useDelegate,
             useDynamicFee
         );
+
+        emit ModuleAddedToHook(
+            selector,
+            moduleIndex,
+            indexInHookList,
+            useDelegate,
+            useDynamicFee
+        );
     }
 
     /// @inheritdoc IAlgebraModularHub
@@ -188,6 +200,14 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
             useDelegate,
             useDynamicFee
         );
+
+        emit ModuleAddedToHook(
+            selector,
+            moduleIndex,
+            indexInHookList,
+            useDelegate,
+            useDynamicFee
+        );
     }
 
     function _insertModuleToHookList(
@@ -200,9 +220,14 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
         require(
             moduleIndex != 0 &&
                 moduleIndex <= modulesCounter &&
-                moduleIndex < 1 << 6
+                moduleIndex < 1 << 6,
+            "Invalid module index"
         );
-        require(indexInList <= 30);
+        require(
+            modules[moduleIndex].getAddress() != address(0),
+            "Module not registered"
+        );
+        require(indexInList <= 30, "Invalid index in list");
 
         return
             config.insertModule(
@@ -225,6 +250,8 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
             PoolInteractions.deactivateHook(pool, selector);
         }
         hookLists[selector] = config;
+
+        emit ModuleRemovedFromHook(selector, indexInList);
     }
 
     /// @inheritdoc IAlgebraPlugin
