@@ -41,7 +41,7 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
     uint256 public modulesCounter;
 
     modifier onlyPool() {
-        require(msg.sender == pool);
+        require(msg.sender == pool, "Only pool");
         _;
     }
 
@@ -50,7 +50,8 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
             IAlgebraFactory(factory).hasRoleOrOwner(
                 POOLS_ADMINISTRATOR_ROLE,
                 msg.sender
-            )
+            ),
+            "Only pools administrator"
         );
         _;
     }
@@ -507,7 +508,7 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
     /// @dev Propagates an error from external call or delegate call
     function _propagateError(bytes memory returnData) internal pure {
         // Look for revert reason and bubble it up if present
-        require(returnData.length > 0);
+        require(returnData.length > 0); // revert silently if call reverted without any message
         // The easiest way to bubble the revert reason is using memory via assembly
         assembly ("memory-safe") {
             revert(add(32, returnData), mload(returnData))
