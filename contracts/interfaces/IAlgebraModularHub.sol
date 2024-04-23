@@ -3,6 +3,8 @@ pragma solidity ^0.8.4;
 
 import {HookList} from "../types/HookList.sol";
 import {ModuleData} from "../types/ModuleData.sol";
+import {InsertModuleParams} from "../types/InsertModuleParams.sol";
+import {RemoveModuleParams} from "../types/RemoveModuleParams.sol";
 
 /// @notice The Algebra modular system hub
 /// @dev This contract used to proxy hook calls from the Algebra liquidity pool to different modules.
@@ -62,6 +64,13 @@ interface IAlgebraModularHub {
     /// @return The packed module info
     function modules(uint256 moduleIndex) external view returns (ModuleData);
 
+    /// @notice Returns the global module index by address
+    /// @param moduleAddress The address of module
+    /// @return moduleIndex The global index of module
+    function moduleAddressToIndex(
+        address moduleAddress
+    ) external view returns (uint256 moduleIndex);
+
     /// @notice Returns the amount of registered modules
     /// @return The amount of registered modules
     function modulesCounter() external view returns (uint256);
@@ -115,44 +124,19 @@ interface IAlgebraModularHub {
     /// @param moduleAddress The address of new module contract
     function replaceModule(uint256 index, address moduleAddress) external;
 
-    /// @notice Used to connect a module to the hook
-    /// @dev Only pools administrator can call this
-    /// Module will be added to the end of hook module list
-    /// @param selector The selector of hook
-    /// @param moduleIndex The global index of module
-    /// @param useDelegate Should corresponding module be called with delegate call or not
-    /// @param useDynamicFee Does corresponding module implement dynamic fee or not
-    /// @return indexInHookList The index of module in hook list
-    function connectModuleToHook(
-        bytes4 selector,
-        uint256 moduleIndex,
-        bool useDelegate,
-        bool useDynamicFee
-    ) external returns (uint256 indexInHookList);
-
     /// @notice Used to insert a module to the hook modules list
     /// @dev Only pools administrator can call this
     /// @dev previous module at index will be shifted to the left
-    /// @param selector The selector of hook
-    /// @param indexInHookList The index of module in hook list
-    /// @param moduleIndex The global index of module
-    /// @param useDelegate Should corresponding module be called with delegate call or not
-    /// @param useDynamicFee Does corresponding module implement dynamic fee or not
-    function insertModuleToHookList(
-        bytes4 selector,
-        uint256 indexInHookList,
-        uint256 moduleIndex,
-        bool useDelegate,
-        bool useDynamicFee
+    /// @param modulesParams The array of modules and parameters
+    function insertModulesToHookLists(
+        InsertModuleParams[] calldata modulesParams
     ) external;
 
     /// @notice Used to remove a module from the hook modules list
     /// @dev Only pools administrator can call this
     /// @dev next modules be shifted to the right
-    /// @param selector The selector of hook
-    /// @param indexInHookList The index of module in hook list
-    function removeModuleFromList(
-        bytes4 selector,
-        uint256 indexInHookList
+    /// @param modulesParams The array of modules and parameters
+    function removeModulesFromHookLists(
+        RemoveModuleParams[] calldata modulesParams
     ) external;
 }

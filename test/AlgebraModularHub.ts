@@ -80,14 +80,14 @@ describe("AlgebraModularHub", function () {
       const selector =
         algebraModularHub.interface.getFunction("beforeSwap").selector;
 
-      await algebraModularHub.insertModuleToHookList(
+      await algebraModularHub.insertModulesToHookLists(
         selector,
         0,
         1,
         false,
         true
       );
-      await algebraModularHub.insertModuleToHookList(
+      await algebraModularHub.insertModulesToHookLists(
         selector,
         0,
         2,
@@ -131,11 +131,11 @@ describe("AlgebraModularHub", function () {
         algebraModularHub.interface.getFunction("beforeSwap").selector;
 
       await expect(
-        algebraModularHub.insertModuleToHookList(selector, 0, 0, false, true)
+        algebraModularHub.insertModulesToHookLists(selector, 0, 0, false, true)
       ).to.be.revertedWithoutReason();
 
       await expect(
-        algebraModularHub.insertModuleToHookList(selector, 0, 3, false, true)
+        algebraModularHub.insertModulesToHookLists(selector, 0, 3, false, true)
       ).to.be.revertedWithoutReason();
     });
 
@@ -146,7 +146,7 @@ describe("AlgebraModularHub", function () {
       const selector =
         algebraModularHub.interface.getFunction("beforeSwap").selector;
 
-      await algebraModularHub.insertModuleToHookList(
+      await algebraModularHub.insertModulesToHookLists(
         selector,
         0,
         1,
@@ -155,11 +155,11 @@ describe("AlgebraModularHub", function () {
       );
 
       await expect(
-        algebraModularHub.insertModuleToHookList(selector, 2, 2, true, false)
+        algebraModularHub.insertModulesToHookLists(selector, 2, 2, true, false)
       ).to.be.revertedWithoutReason();
 
       await expect(
-        algebraModularHub.insertModuleToHookList(selector, 31, 2, true, false)
+        algebraModularHub.insertModulesToHookLists(selector, 31, 2, true, false)
       ).to.be.revertedWithoutReason();
     });
 

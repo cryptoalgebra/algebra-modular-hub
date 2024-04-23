@@ -1,6 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.5.0;
 
+struct BeforeInitializeParams {
+    address pool;
+    address sender;
+    uint160 sqrtPriceX96;
+}
+
+struct AfterInitializeParams {
+    address pool;
+    address sender;
+    uint160 sqrtPriceX96;
+    int24 tick;
+}
+
 struct BeforeSwapParams {
     address pool;
     address sender;

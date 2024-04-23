@@ -6,6 +6,8 @@ import {IAlgebraPlugin} from "@cryptoalgebra/integral-core/contracts/interfaces/
 import {Plugins} from "@cryptoalgebra/integral-core/contracts/libraries/Plugins.sol";
 
 library PoolInteractions {
+    uint256 internal constant BEFORE_INIT_STUB_FLAG = 0xff;
+
     function setFee(address poolAddress, uint16 value) internal {
         IAlgebraPool(poolAddress).setFee(value);
     }
@@ -28,6 +30,7 @@ library PoolInteractions {
     function activateHook(address pool, bytes4 selector) internal {
         uint8 pluginConfig = _getPluginConfig(pool);
         uint256 flag = flagForHook(selector);
+        require(flag != 0 && flag != BEFORE_INIT_STUB_FLAG, "Invalid hook");
         if (!Plugins.hasFlag(pluginConfig, flag)) {
             pluginConfig |= uint8(flag);
             _setPluginConfig(pool, pluginConfig);
@@ -37,6 +40,7 @@ library PoolInteractions {
     function deactivateHook(address pool, bytes4 selector) internal {
         uint8 pluginConfig = _getPluginConfig(pool);
         uint256 flag = flagForHook(selector);
+        require(flag != 0 && flag != BEFORE_INIT_STUB_FLAG, "Invalid hook");
         if (Plugins.hasFlag(pluginConfig, flag)) {
             pluginConfig ^= uint8(flag);
             _setPluginConfig(pool, pluginConfig);
@@ -46,8 +50,11 @@ library PoolInteractions {
     /// @dev returns 0 for an incorrect hook
     function flagForHook(bytes4 selector) internal pure returns (uint256) {
         uint256 flag;
-
-        if (selector == IAlgebraPlugin.beforeSwap.selector)
+        if (selector == IAlgebraPlugin.beforeInitialize.selector)
+            flag = BEFORE_INIT_STUB_FLAG; // technical flag
+        else if (selector == IAlgebraPlugin.afterInitialize.selector)
+            flag = Plugins.AFTER_INIT_FLAG;
+        else if (selector == IAlgebraPlugin.beforeSwap.selector)
             flag = Plugins.BEFORE_SWAP_FLAG;
         else if (selector == IAlgebraPlugin.afterSwap.selector)
             flag = Plugins.AFTER_SWAP_FLAG;

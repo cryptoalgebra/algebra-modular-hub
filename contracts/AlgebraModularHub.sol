@@ -2,24 +2,31 @@
 pragma solidity ^0.8.24;
 
 import {IAlgebraPlugin} from "@cryptoalgebra/integral-core/contracts/interfaces/plugin/IAlgebraPlugin.sol";
+import {IAlgebraDynamicFeePlugin} from "@cryptoalgebra/integral-core/contracts/interfaces/plugin/IAlgebraDynamicFeePlugin.sol";
 import {IAlgebraPool} from "@cryptoalgebra/integral-core/contracts/interfaces/IAlgebraPool.sol";
 import {IAlgebraFactory} from "@cryptoalgebra/integral-core/contracts/interfaces/IAlgebraFactory.sol";
 
 import {IAlgebraModule} from "./interfaces/IAlgebraModule.sol";
 import {IAlgebraModularHub} from "./interfaces/IAlgebraModularHub.sol";
 
+import {InsertModuleParams} from "./types/InsertModuleParams.sol";
+import {RemoveModuleParams} from "./types/RemoveModuleParams.sol";
 import {HookList} from "./types/HookList.sol";
 import {ModuleData} from "./types/ModuleData.sol";
 
 import {HookListLib} from "./libraries/HookListLib.sol";
 import {ModuleDataLib} from "./libraries/ModuleDataLib.sol";
 import {PoolInteractions} from "./libraries/PoolInteractions.sol";
-import {BeforeSwapParams, AfterSwapParams, BeforeModifyPositionParams, AfterModifyPositionParams, BeforeFlashParams, AfterFlashParams} from "./types/HookParams.sol";
+import {BeforeInitializeParams, AfterInitializeParams, BeforeSwapParams, AfterSwapParams, BeforeModifyPositionParams, AfterModifyPositionParams, BeforeFlashParams, AfterFlashParams} from "./types/HookParams.sol";
 
 /// @title Algebra Modular Hub
 /// @notice This plugin is used to flexibly connect different modules to the liquidity pool
 /// @dev Version: Algebra Integral 1.0
-contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
+contract AlgebraModularHub is
+    IAlgebraPlugin,
+    IAlgebraDynamicFeePlugin,
+    IAlgebraModularHub
+{
     using HookListLib for HookList;
     using ModuleDataLib for ModuleData;
 
@@ -36,6 +43,10 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
     mapping(bytes4 hookSelector => HookList) public override hookLists;
     /// @inheritdoc IAlgebraModularHub
     mapping(uint256 moduleIndex => ModuleData) public override modules;
+    /// @inheritdoc IAlgebraModularHub
+    mapping(address moduleAddress => uint256 moduleIndex)
+        public
+        override moduleAddressToIndex;
 
     /// @inheritdoc IAlgebraModularHub
     uint256 public modulesCounter;
@@ -121,7 +132,10 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
     ) external override onlyPoolAdministrator returns (uint256 index) {
         index = ++modulesCounter; // starting from 1
         require(index < 1 << 6, "Can't add new modules anymore");
+        require(moduleAddressToIndex[moduleAddress] == 0, "Already registered");
+
         modules[index] = ModuleDataLib.write(moduleAddress);
+        moduleAddressToIndex[moduleAddress] = index;
         emit ModuleRegistered(moduleAddress, index);
     }
 
@@ -131,128 +145,98 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
         address moduleAddress
     ) external override onlyPoolAdministrator {
         // dangerous action
+        require(index != 0, "Invalid index");
         require(index <= modulesCounter, "Module not registered");
         require(moduleAddress != address(0), "Can't replace module with zero");
+        require(moduleAddressToIndex[moduleAddress] == 0, "Already registered");
+
+        moduleAddressToIndex[moduleAddress] = index;
+        moduleAddressToIndex[modules[index].getAddress()] = 0;
         modules[index] = ModuleDataLib.write(moduleAddress);
         emit ModuleReplaced(moduleAddress, index);
     }
 
     /// @inheritdoc IAlgebraModularHub
-    function connectModuleToHook(
-        bytes4 selector,
-        uint256 moduleIndex,
-        bool useDelegate,
-        bool useDynamicFee
-    )
-        external
-        override
-        onlyPoolAdministrator
-        returns (uint256 indexInHookList)
-    {
-        _checkSelector(selector);
-        HookList config = hookLists[selector];
-
-        for (; indexInHookList < 32; ++indexInHookList) {
-            // trying to find free place for module
-            if (indexInHookList == 31) revert("No free place");
-            if (config.getModuleRaw(indexInHookList) == 0) break;
-        }
-
-        if (!config.hasActiveModules()) {
-            PoolInteractions.activateHook(pool, selector);
-        }
-
-        hookLists[selector] = _insertModuleToHookList(
-            config,
-            indexInHookList,
-            moduleIndex,
-            useDelegate,
-            useDynamicFee
-        );
-
-        emit ModuleAddedToHook(
-            selector,
-            moduleIndex,
-            indexInHookList,
-            useDelegate,
-            useDynamicFee
-        );
-    }
-
-    /// @inheritdoc IAlgebraModularHub
-    function insertModuleToHookList(
-        bytes4 selector,
-        uint256 indexInHookList,
-        uint256 moduleIndex,
-        bool useDelegate,
-        bool useDynamicFee
+    function insertModulesToHookLists(
+        InsertModuleParams[] calldata modulesParams
     ) external override onlyPoolAdministrator {
-        _checkSelector(selector);
-        HookList config = hookLists[selector];
-
-        if (!config.hasActiveModules()) {
-            PoolInteractions.activateHook(pool, selector);
+        for (uint256 i; i < modulesParams.length; i++) {
+            _insertModuleToHookList(
+                modulesParams[i].selector,
+                modulesParams[i].indexInHookList,
+                modulesParams[i].moduleGlobalIndex,
+                modulesParams[i].useDelegate,
+                modulesParams[i].useDynamicFee
+            );
         }
-
-        hookLists[selector] = _insertModuleToHookList(
-            config,
-            indexInHookList,
-            moduleIndex,
-            useDelegate,
-            useDynamicFee
-        );
-
-        emit ModuleAddedToHook(
-            selector,
-            moduleIndex,
-            indexInHookList,
-            useDelegate,
-            useDynamicFee
-        );
     }
 
     function _insertModuleToHookList(
-        HookList config,
-        uint256 indexInList,
-        uint256 moduleIndex,
+        bytes4 selector,
+        uint256 indexInHookList,
+        uint256 moduleGlobalIndex,
         bool useDelegate,
         bool useDynamicFee
-    ) internal view returns (HookList) {
+    ) internal {
+        _checkSelector(selector);
+        HookList config = hookLists[selector];
+
+        if (
+            !config.hasActiveModules() &&
+            selector != IAlgebraPlugin.beforeInitialize.selector
+        ) {
+            PoolInteractions.activateHook(pool, selector);
+        }
+
         require(
-            moduleIndex != 0 &&
-                moduleIndex <= modulesCounter &&
-                moduleIndex < 1 << 6,
+            moduleGlobalIndex != 0 &&
+                moduleGlobalIndex <= modulesCounter &&
+                moduleGlobalIndex < 1 << 6,
             "Invalid module index"
         );
         require(
-            modules[moduleIndex].getAddress() != address(0),
+            modules[moduleGlobalIndex].getAddress() != address(0),
             "Module not registered"
         );
-        require(indexInList <= 30, "Invalid index in list");
+        require(indexInHookList <= 30, "Invalid index in list");
 
-        return
-            config.insertModule(
-                indexInList,
-                moduleIndex,
-                useDelegate,
-                useDynamicFee
-            );
+        hookLists[selector] = config.insertModule(
+            indexInHookList,
+            moduleGlobalIndex,
+            useDelegate,
+            useDynamicFee
+        );
+
+        emit ModuleAddedToHook(
+            selector,
+            moduleGlobalIndex,
+            indexInHookList,
+            useDelegate,
+            useDynamicFee
+        );
     }
 
     /// @inheritdoc IAlgebraModularHub
-    function removeModuleFromList(
-        bytes4 selector,
-        uint256 indexInList
+    function removeModulesFromHookLists(
+        RemoveModuleParams[] calldata modulesParams
     ) external override onlyPoolAdministrator {
-        _checkSelector(selector);
-        HookList config = hookLists[selector].removeModule(indexInList);
+        for (uint256 i; i < modulesParams.length; i++) {
+            bytes4 selector = modulesParams[i].selector;
+            uint256 indexInHookList = modulesParams[i].indexInHookList;
 
-        if (!config.hasActiveModules()) {
-            PoolInteractions.deactivateHook(pool, selector);
+            _checkSelector(selector);
+            HookList config = hookLists[selector].removeModule(indexInHookList);
+
+            if (
+                !config.hasActiveModules() &&
+                selector != IAlgebraPlugin.beforeInitialize.selector
+            ) {
+                PoolInteractions.deactivateHook(pool, selector);
+            }
+            hookLists[selector] = config;
+
+            emit ModuleRemovedFromHook(selector, indexInHookList);
         }
-        hookLists[selector] = config;
-
-        emit ModuleRemovedFromHook(selector, indexInList);
     }
 
     /// @inheritdoc IAlgebraPlugin
@@ -260,21 +244,34 @@ contract AlgebraModularHub is IAlgebraPlugin, IAlgebraModularHub {
         return 0;
     }
 
+    /// @inheritdoc IAlgebraDynamicFeePlugin
+    function getCurrentFee() external pure override returns (uint16) {
+        revert("getCurrentFee: not implemented");
+    }
+
     /// @inheritdoc IAlgebraPlugin
     function beforeInitialize(
-        address,
-        uint160
-    ) external view override onlyPool returns (bytes4) {
-        return IAlgebraPlugin.beforeInitialize.selector;
+        address sender,
+        uint160 sqrtPriceX96
+    ) external override onlyPool returns (bytes4 selector) {
+        selector = IAlgebraPlugin.beforeInitialize.selector;
+        bytes memory params = abi.encode(
+            BeforeInitializeParams(pool, sender, sqrtPriceX96)
+        );
+        _executeHook(selector, params);
     }
 
     /// @inheritdoc IAlgebraPlugin
     function afterInitialize(
-        address,
-        uint160,
-        int24
-    ) external view override onlyPool returns (bytes4 selector) {
-        return IAlgebraPlugin.afterInitialize.selector;
+        address sender,
+        uint160 sqrtPriceX96,
+        int24 tick
+    ) external override onlyPool returns (bytes4 selector) {
+        selector = IAlgebraPlugin.afterInitialize.selector;
+        bytes memory params = abi.encode(
+            AfterInitializeParams(pool, sender, sqrtPriceX96, tick)
+        );
+        _executeHook(selector, params);
     }
 
     /// @inheritdoc IAlgebraPlugin
