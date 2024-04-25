@@ -42,14 +42,14 @@ contract AlgebraModularHub is
     /// @inheritdoc IAlgebraModularHub
     mapping(bytes4 hookSelector => HookList) public override hookLists;
     /// @inheritdoc IAlgebraModularHub
-    mapping(uint256 moduleGlobalIndex => ModuleData) public override modules;
-    /// @inheritdoc IAlgebraModularHub
     mapping(address moduleAddress => uint256 moduleGlobalIndex)
         public
         override moduleAddressToIndex;
 
     /// @inheritdoc IAlgebraModularHub
     uint256 public modulesCounter;
+
+    mapping(uint256 moduleGlobalIndex => ModuleData) internal _modules;
 
     modifier onlyPool() {
         require(msg.sender == pool, "Only pool");
@@ -70,6 +70,13 @@ contract AlgebraModularHub is
     constructor(address _pool, address _factory) {
         pool = _pool;
         factory = _factory;
+    }
+
+    /// @inheritdoc IAlgebraModularHub
+    function modules(
+        uint256 globalIndex
+    ) external view override returns (address moduleAddress) {
+        return _modules[globalIndex].getAddress();
     }
 
     /// @inheritdoc IAlgebraModularHub
@@ -129,31 +136,37 @@ contract AlgebraModularHub is
     /// @inheritdoc IAlgebraModularHub
     function registerModule(
         address moduleAddress
-    ) external override onlyPoolAdministrator returns (uint256 index) {
-        index = ++modulesCounter; // starting from 1
-        require(index < 1 << 6, "Can't add new modules anymore");
+    ) external override onlyPoolAdministrator returns (uint256 globalIndex) {
+        globalIndex = ++modulesCounter; // starting from 1
+        require(globalIndex < 1 << 6, "Can't add new modules anymore");
         require(moduleAddressToIndex[moduleAddress] == 0, "Already registered");
 
-        modules[index] = ModuleDataLib.write(moduleAddress);
-        moduleAddressToIndex[moduleAddress] = index;
-        emit ModuleRegistered(moduleAddress, index);
+        _modules[globalIndex] = ModuleDataLib.write(moduleAddress);
+        moduleAddressToIndex[moduleAddress] = globalIndex;
+        emit ModuleRegistered(moduleAddress, globalIndex);
     }
 
     /// @inheritdoc IAlgebraModularHub
     function replaceModule(
-        uint256 index,
-        address moduleAddress
+        uint256 globalIndex,
+        address newModuleAddress
     ) external override onlyPoolAdministrator {
         // dangerous action
-        require(index != 0, "Invalid index");
-        require(index <= modulesCounter, "Module not registered");
-        require(moduleAddress != address(0), "Can't replace module with zero");
-        require(moduleAddressToIndex[moduleAddress] == 0, "Already registered");
+        require(globalIndex != 0, "Invalid index");
+        require(globalIndex <= modulesCounter, "Module not registered");
+        require(
+            newModuleAddress != address(0),
+            "Can't replace module with zero"
+        );
+        require(
+            moduleAddressToIndex[newModuleAddress] == 0,
+            "Already registered"
+        );
 
-        moduleAddressToIndex[moduleAddress] = index;
-        moduleAddressToIndex[modules[index].getAddress()] = 0;
-        modules[index] = ModuleDataLib.write(moduleAddress);
-        emit ModuleReplaced(moduleAddress, index);
+        moduleAddressToIndex[newModuleAddress] = globalIndex;
+        moduleAddressToIndex[_modules[globalIndex].getAddress()] = 0;
+        _modules[globalIndex] = ModuleDataLib.write(newModuleAddress);
+        emit ModuleReplaced(newModuleAddress, globalIndex);
     }
 
     /// @inheritdoc IAlgebraModularHub
@@ -194,10 +207,6 @@ contract AlgebraModularHub is
                 moduleGlobalIndex < 1 << 6,
             "Invalid module index"
         );
-        require(
-            modules[moduleGlobalIndex].getAddress() != address(0),
-            "Module not registered"
-        );
         require(indexInHookList <= 30, "Invalid index in list");
 
         hookLists[selector] = config.insertModule(
@@ -225,8 +234,13 @@ contract AlgebraModularHub is
             uint256 indexInHookList = modulesParams[i].indexInHookList;
 
             _checkSelector(selector);
-            HookList config = hookLists[selector].removeModule(indexInHookList);
+            HookList config = hookLists[selector];
+            require(
+                config.getModuleRaw(indexInHookList) != 0,
+                "Module not connected"
+            );
 
+            config = config.removeModule(indexInHookList);
             if (
                 !config.hasActiveModules() &&
                 selector != IAlgebraPlugin.beforeInitialize.selector
@@ -447,7 +461,7 @@ contract AlgebraModularHub is
                 if (index == 0) break; // empty slot
 
                 // we are trying to minimize cold slots SLOADs
-                address moduleAddress = modules[index].getAddress();
+                address moduleAddress = _modules[index].getAddress();
 
                 bool success;
                 bytes memory returnData;

@@ -15,6 +15,14 @@ abstract contract AlgebraModule is IAlgebraModule {
         bytes memory params,
         uint16 poolFeeCache
     ) external {
+        if (selector == IAlgebraPlugin.beforeInitialize.selector) {
+            return _beforeInitialize(params, poolFeeCache);
+        }
+
+        if (selector == IAlgebraPlugin.afterInitialize.selector) {
+            return _afterInitialize(params, poolFeeCache);
+        }
+
         if (selector == IAlgebraPlugin.beforeSwap.selector) {
             return _beforeSwap(params, poolFeeCache);
         }
@@ -38,6 +46,20 @@ abstract contract AlgebraModule is IAlgebraModule {
         if (selector == IAlgebraPlugin.afterFlash.selector) {
             return _afterFlash(params, poolFeeCache);
         }
+    }
+
+    function _beforeInitialize(
+        bytes memory /* params */,
+        uint16 /* poolFeeCache */
+    ) internal virtual {
+        revert("Not implemented");
+    }
+
+    function _afterInitialize(
+        bytes memory /* params */,
+        uint16 /* poolFeeCache */
+    ) internal virtual {
+        revert("Not implemented");
     }
 
     function _beforeSwap(

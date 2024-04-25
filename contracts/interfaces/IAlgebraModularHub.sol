@@ -2,7 +2,6 @@
 pragma solidity ^0.8.4;
 
 import {HookList} from "../types/HookList.sol";
-import {ModuleData} from "../types/ModuleData.sol";
 import {InsertModuleParams} from "../types/InsertModuleParams.sol";
 import {RemoveModuleParams} from "../types/RemoveModuleParams.sol";
 
@@ -60,9 +59,9 @@ interface IAlgebraModularHub {
     function hookLists(bytes4 selector) external view returns (HookList);
 
     /// @notice Returns the module info by index
-    /// @param moduleIndex The index of registered module
-    /// @return The packed module info
-    function modules(uint256 moduleIndex) external view returns (ModuleData);
+    /// @param globalIndex The index of registered module
+    /// @return The address of module
+    function modules(uint256 globalIndex) external view returns (address);
 
     /// @notice Returns the global module index by address
     /// @param moduleAddress The address of module

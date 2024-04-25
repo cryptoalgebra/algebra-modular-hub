@@ -11,15 +11,36 @@ contract ModuleMock is AlgebraModule {
     bool public dynamicFeeBefore;
     bool public dynamicFeeAfter;
 
+    bool public immediatelyUpdateDynamicFeeBefore;
+    bool public immediatelyUpdateDynamicFeeAfter;
+
+    bool public revertsSilently;
+    bool public revertsWithMessage;
+
     constructor(bool _dynamicFeeBefore, bool _dynamicFeeAfter) {
         dynamicFeeBefore = _dynamicFeeBefore;
         dynamicFeeAfter = _dynamicFeeAfter;
+    }
+
+    function setRevert() external {
+        revertsSilently = true;
+    }
+
+    function setRevertWithMessage() external {
+        revertsWithMessage = true;
+    }
+
+    function setImmediatelyUpdateDynamicFee(bool before, bool value) external {
+        if (before) immediatelyUpdateDynamicFeeBefore = value;
+        else immediatelyUpdateDynamicFeeAfter = value;
     }
 
     function _beforeSwap(
         bytes memory /* params */,
         uint16 /* poolFeeCache */
     ) internal virtual override {
+        require(!revertsSilently);
+        require(!revertsWithMessage, "Revert in module mock");
         touchedBeforeSwap = true;
 
         // To decode params for beforeSwap:
@@ -29,7 +50,10 @@ contract ModuleMock is AlgebraModule {
         */
 
         if (dynamicFeeBefore) {
-            ModuleUtils.returnDynamicFeeResult(600, false);
+            ModuleUtils.returnDynamicFeeResult(
+                600,
+                immediatelyUpdateDynamicFeeBefore
+            );
         }
     }
 
@@ -40,7 +64,10 @@ contract ModuleMock is AlgebraModule {
         touchedAfterSwap = true;
 
         if (dynamicFeeAfter) {
-            ModuleUtils.returnDynamicFeeResult(600, false);
+            ModuleUtils.returnDynamicFeeResult(
+                600,
+                immediatelyUpdateDynamicFeeAfter
+            );
         }
     }
 }
