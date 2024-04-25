@@ -170,7 +170,7 @@ describe("HookList", function () {
       for (let i = 1; i < 31; i++) {
         await expect(
           hookListTest.insertModule(EMPTY_HOOK_LIST, i, 1, false, false)
-        ).to.be.revertedWithoutReason();
+        ).to.be.revertedWith("Can't create gaps in hook list");
       }
     });
 
@@ -181,7 +181,7 @@ describe("HookList", function () {
       }
       await expect(
         hookListTest.insertModule(EMPTY_HOOK_LIST, 31, 1, false, false)
-      ).to.be.revertedWithoutReason();
+      ).to.be.revertedWith("Invalid index");
     });
 
     it("Cannot add 32 modules pushing from bottom", async function () {
@@ -191,7 +191,7 @@ describe("HookList", function () {
       }
       await expect(
         hookListTest.insertModule(list, 0, 1, false, false)
-      ).to.be.revertedWithoutReason();
+      ).to.be.revertedWith("No free space in hook list");
     });
   });
 
@@ -314,7 +314,7 @@ describe("HookList", function () {
     it("Cannot remove invalid index", async function () {
       await expect(
         hookListTest.removeModule(EMPTY_HOOK_LIST, 31)
-      ).to.be.revertedWithoutReason();
+      ).to.be.revertedWith("Invalid index");
     });
   });
 });

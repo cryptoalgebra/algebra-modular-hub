@@ -42,9 +42,9 @@ contract AlgebraModularHub is
     /// @inheritdoc IAlgebraModularHub
     mapping(bytes4 hookSelector => HookList) public override hookLists;
     /// @inheritdoc IAlgebraModularHub
-    mapping(uint256 moduleIndex => ModuleData) public override modules;
+    mapping(uint256 moduleGlobalIndex => ModuleData) public override modules;
     /// @inheritdoc IAlgebraModularHub
-    mapping(address moduleAddress => uint256 moduleIndex)
+    mapping(address moduleAddress => uint256 moduleGlobalIndex)
         public
         override moduleAddressToIndex;
 
@@ -81,7 +81,7 @@ contract AlgebraModularHub is
         view
         override
         returns (
-            uint256 moduleIndex,
+            uint256 moduleGlobalIndex,
             bool implementsDynamicFee,
             bool useDelegate
         )
@@ -98,12 +98,12 @@ contract AlgebraModularHub is
         view
         override
         returns (
-            uint256[] memory moduleIndexes,
+            uint256[] memory moduleGlobalIndexes,
             bool[] memory hasDynamicFee,
             bool[] memory usesDelegate
         )
     {
-        moduleIndexes = new uint256[](30);
+        moduleGlobalIndexes = new uint256[](30);
         hasDynamicFee = new bool[](30);
         usesDelegate = new bool[](30);
 
@@ -112,15 +112,15 @@ contract AlgebraModularHub is
 
         uint256 length;
         for (uint256 i; i < 31; i++) {
-            (moduleIndexes[i], hasDynamicFee[i], usesDelegate[i]) = config
+            (moduleGlobalIndexes[i], hasDynamicFee[i], usesDelegate[i]) = config
                 .getModule(i);
-            if (moduleIndexes[i] == 0) break; // empty place
+            if (moduleGlobalIndexes[i] == 0) break; // empty place
             length++;
         }
 
         // rewrite length in arrays
         assembly {
-            mstore(moduleIndexes, length)
+            mstore(moduleGlobalIndexes, length)
             mstore(hasDynamicFee, length)
             mstore(usesDelegate, length)
         }
