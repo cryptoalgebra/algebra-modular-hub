@@ -3,7 +3,6 @@ pragma solidity ^0.8.24;
 
 import {AlgebraModule} from "../base/AlgebraModule.sol";
 import {ModuleUtils} from "../libraries/ModuleUtils.sol";
-import {IAlgebraModule} from "../interfaces/IAlgebraModule.sol";
 
 
 contract ModuleMock is AlgebraModule {
@@ -19,7 +18,7 @@ contract ModuleMock is AlgebraModule {
     bool public revertsSilently;
     bool public revertsWithMessage;
 
-    constructor(address _modularHub, bool _dynamicFeeBefore, bool _dynamicFeeAfter) AlgebraModule(_modularHub, IAlgebraModule(_modularHub).pool()) {
+    constructor(address _modularHub, bool _dynamicFeeBefore, bool _dynamicFeeAfter) AlgebraModule(_modularHub) {
         dynamicFeeBefore = _dynamicFeeBefore;
         dynamicFeeAfter = _dynamicFeeAfter;
     }
