@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.20;
 
 import {HookList} from "../types/HookList.sol";
 import {HookListLib} from "../libraries/HookListLib.sol";
