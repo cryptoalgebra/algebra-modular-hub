@@ -10,6 +10,9 @@ abstract contract AlgebraModule is IAlgebraModule {
     /**
      * @inheritdoc IAlgebraModule
      */
+    string public constant override MODULE_NAME = "Example module";
+
+    uint8 public constant override DEFAULT_PLUGIN_CONFIG = 0;
 
     address public immutable override modularHub;
     address public immutable override pool;
