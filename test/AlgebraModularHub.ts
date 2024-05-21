@@ -101,8 +101,8 @@ describe("AlgebraModularHub", function () {
   describe("Register module", function () {
     it("Can register module", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
-      const module2 = await ModuleMock.deploy(false, false);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
+      const module2 = await ModuleMock.deploy(algebraModularHub, false, false);
 
       await algebraModularHub.registerModule(module1);
       await algebraModularHub.registerModule(module2);
@@ -113,7 +113,7 @@ describe("AlgebraModularHub", function () {
 
     it("Cannot register module twice", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
 
       await algebraModularHub.registerModule(module1);
 
@@ -126,11 +126,11 @@ describe("AlgebraModularHub", function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
 
       for (let i = 0; i < 63; i++) {
-        const module = await ModuleMock.deploy(true, true);
+        const module = await ModuleMock.deploy(algebraModularHub, true, true);
         await algebraModularHub.registerModule(module);
       }
 
-      const module63 = await ModuleMock.deploy(true, true);
+      const module63 = await ModuleMock.deploy(algebraModularHub, true, true);
       await expect(
         algebraModularHub.registerModule(module63)
       ).to.be.revertedWith("Can't add new modules anymore");
@@ -269,9 +269,8 @@ describe("AlgebraModularHub", function () {
 
     it("Connected module should be called", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
-
-      const module2 = await ModuleMock.deploy(false, false);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
+      const module2 = await ModuleMock.deploy(algebraModularHub, false, false);
 
       await algebraModularHub.registerModule(module1);
       await algebraModularHub.registerModule(module2);
@@ -283,7 +282,6 @@ describe("AlgebraModularHub", function () {
       await connectModuleToHook(selector, 1, 2, true, false); // via delegate call
 
       await poolMock.pseudoSwap((2n * 1n) << 96n);
-
       expect(await module1.touchedBeforeSwap()).to.be.eq(true);
       expect(await module1.touchedAfterSwap()).to.be.eq(false);
 
@@ -294,11 +292,11 @@ describe("AlgebraModularHub", function () {
   describe("Replace module", function () {
     it("Can replace module", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
 
-      const module2 = await ModuleMock.deploy(false, false);
+      const module2 = await ModuleMock.deploy(algebraModularHub, false, false);
 
-      const module3 = await ModuleMock.deploy(false, false);
+      const module3 = await ModuleMock.deploy(algebraModularHub, false, false);
 
       await algebraModularHub.registerModule(module1);
       await algebraModularHub.registerModule(module2);
@@ -313,7 +311,7 @@ describe("AlgebraModularHub", function () {
 
     it("Cannot replace module at index 0", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
 
       await expect(
         algebraModularHub.replaceModule(0, module1)
@@ -322,7 +320,7 @@ describe("AlgebraModularHub", function () {
 
     it("Cannot replace not registered module", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
 
       await expect(
         algebraModularHub.replaceModule(1, module1)
@@ -337,7 +335,7 @@ describe("AlgebraModularHub", function () {
 
     it("Cannot replace with zero address", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
 
       await algebraModularHub.registerModule(module1);
 
@@ -348,8 +346,8 @@ describe("AlgebraModularHub", function () {
 
     it("Cannot replace with registered module", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
-      const module2 = await ModuleMock.deploy(false, false);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
+      const module2 = await ModuleMock.deploy(algebraModularHub, false, false);
 
       await algebraModularHub.registerModule(module1);
       await algebraModularHub.registerModule(module2);
@@ -460,7 +458,7 @@ describe("AlgebraModularHub", function () {
   describe("Execute", function () {
     it("Propagates inner silent error", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
       await algebraModularHub.registerModule(module1);
 
       const selector =
@@ -477,7 +475,7 @@ describe("AlgebraModularHub", function () {
 
     it("Propagates inner error with message", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
       await algebraModularHub.registerModule(module1);
 
       const selector =
@@ -494,8 +492,8 @@ describe("AlgebraModularHub", function () {
 
     it("Can update fee value immediately", async function () {
       const ModuleMock = await ethers.getContractFactory("ModuleMock");
-      const module1 = await ModuleMock.deploy(true, true);
-      const module2 = await ModuleMock.deploy(true, true);
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
+      const module2 = await ModuleMock.deploy(algebraModularHub, true, true);
       await algebraModularHub.registerModule(module1);
       await algebraModularHub.registerModule(module2);
 
@@ -517,6 +515,18 @@ describe("AlgebraModularHub", function () {
       expect(await module2.touchedAfterSwap()).to.be.eq(false);
 
       expect(await poolMock.currentFee()).to.be.eq(600n);
+    });
+
+    it("Only modular hub or pool can call module execute() function", async function () {
+      const ModuleMock = await ethers.getContractFactory("ModuleMock");
+      const module1 = await ModuleMock.deploy(algebraModularHub, true, true);
+      const module2 = await ModuleMock.deploy(algebraModularHub, false, false);
+
+      await algebraModularHub.registerModule(module1);
+      await algebraModularHub.registerModule(module2);
+
+      await expect(module1.execute(ethers.toBeArray("0xbebebebe"), ethers.toBeArray(1337), 1337)).to.be.revertedWith("Modular hub or pool");
+      await expect(module2.execute(ethers.toBeArray("0xbebebebe"), ethers.toBeArray(1337), 1337)).to.be.revertedWith("Modular hub or pool");
     });
   });
 });
