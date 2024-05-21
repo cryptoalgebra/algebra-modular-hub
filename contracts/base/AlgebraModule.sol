@@ -10,11 +10,24 @@ abstract contract AlgebraModule is IAlgebraModule {
     /**
      * @inheritdoc IAlgebraModule
      */
+    string public constant override MODULE_NAME = "Example module";
+
+    uint8 public constant override DEFAULT_PLUGIN_CONFIG = 0;
+
+    address public immutable override modularHub;
+    address public immutable override pool;
+
+    constructor(address _modularHub, address _pool) {
+        (modularHub, pool) = (_modularHub, _pool);
+    }
+
     function execute(
         bytes4 selector,
         bytes memory params,
         uint16 poolFeeCache
     ) external {
+        require(msg.sender == modularHub || msg.sender == pool, 'Modular hub or pool');
+
         if (selector == IAlgebraPlugin.beforeInitialize.selector) {
             return _beforeInitialize(params, poolFeeCache);
         }
