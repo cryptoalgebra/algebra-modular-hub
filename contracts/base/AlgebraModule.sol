@@ -14,15 +14,17 @@ abstract contract AlgebraModule is IAlgebraModule {
     address public immutable override modularHub;
     address public immutable override pool;
 
-    constructor(address _modularHub, address _pool) {
-        (modularHub, pool) = (_modularHub, _pool);
+    constructor(address _modularHub) {
+        modularHub = _modularHub;
+
+        pool = IAlgebraModule(_modularHub).pool();
     }
 
-    function MODULE_NAME() public pure override returns (string memory) {
+    function MODULE_NAME() external pure virtual override returns (string memory) {
         revert("Not implemented");
     }
 
-    function DEFAULT_PLUGIN_CONFIG() public pure override returns (uint8) {
+    function DEFAULT_PLUGIN_CONFIG() external pure virtual override returns (uint8) {
         revert("Not implement");
     }
 
