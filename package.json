@@ -1,6 +1,6 @@
 {
-  "name": "@cryptoalgebra/algebra-modular-hub",
-  "version": "0.1.0",
+  "name": "@cryptoalgebra/algebra-modular-hub-v0.8.20",
+  "version": "0.1.2",
   "description": "Modular hub for Algebra plugins",
   "main": "index.js",
   "scripts": {
