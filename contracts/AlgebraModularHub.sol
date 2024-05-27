@@ -19,6 +19,8 @@ import {ModuleDataLib} from "./libraries/ModuleDataLib.sol";
 import {PoolInteractions} from "./libraries/PoolInteractions.sol";
 import {BeforeInitializeParams, AfterInitializeParams, BeforeSwapParams, AfterSwapParams, BeforeModifyPositionParams, AfterModifyPositionParams, BeforeFlashParams, AfterFlashParams} from "./types/HookParams.sol";
 
+import 'hardhat/console.sol';
+
 /// @title Algebra Modular Hub
 /// @notice This plugin is used to flexibly connect different modules to the liquidity pool
 /// @dev Version: Algebra Integral 1.0
@@ -270,7 +272,7 @@ contract AlgebraModularHub is
     ) external override onlyPool returns (bytes4 selector) {
         selector = IAlgebraPlugin.beforeInitialize.selector;
         bytes memory params = abi.encode(
-            BeforeInitializeParams(pool, sender, sqrtPriceX96)
+            BeforeInitializeParams(pool, sender, sqrtPriceX96, 0)
         );
         _executeHook(selector, params);
     }
@@ -462,6 +464,15 @@ contract AlgebraModularHub is
 
                 // we are trying to minimize cold slots SLOADs
                 address moduleAddress = _modules[index].getAddress();
+                uint256 moduleGlobalIndex = moduleAddressToIndex[moduleAddress];
+
+                if (selector == IAlgebraPlugin.beforeInitialize.selector) {
+                    assembly {
+                        let originalLength := mload(params)
+                        let offset := add(params, originalLength)
+                        mstore(offset, moduleGlobalIndex)
+                    }
+                }
 
                 bool success;
                 bytes memory returnData;
