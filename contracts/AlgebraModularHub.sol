@@ -270,7 +270,7 @@ contract AlgebraModularHub is
     ) external override onlyPool returns (bytes4 selector) {
         selector = IAlgebraPlugin.beforeInitialize.selector;
         bytes memory params = abi.encode(
-            BeforeInitializeParams(pool, sender, sqrtPriceX96)
+            BeforeInitializeParams(pool, sender, sqrtPriceX96, 0)
         );
         _executeHook(selector, params);
     }
@@ -462,6 +462,16 @@ contract AlgebraModularHub is
 
                 // we are trying to minimize cold slots SLOADs
                 address moduleAddress = _modules[index].getAddress();
+
+                if (selector == IAlgebraPlugin.beforeInitialize.selector) {
+                    uint256 moduleGlobalIndex = moduleAddressToIndex[moduleAddress];
+                
+                    assembly {
+                        let originalLength := mload(params)
+                        let offset := add(params, originalLength)
+                        mstore(offset, moduleGlobalIndex)
+                    }
+                }
 
                 bool success;
                 bytes memory returnData;

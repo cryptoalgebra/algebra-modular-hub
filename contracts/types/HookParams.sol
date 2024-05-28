@@ -5,6 +5,7 @@ struct BeforeInitializeParams {
     address pool;
     address sender;
     uint160 sqrtPriceX96;
+    uint256 moduleGlobalIndex;
 }
 
 struct AfterInitializeParams {
